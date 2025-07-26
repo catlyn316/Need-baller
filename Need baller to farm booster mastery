@@ -2,9 +2,16 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
 -- 記錄啟動腳本前的位置
 local originalPosition = nil
+
+-- 腳本控制變量
+local isScriptRunning = false
+local isPositionLocked = false
+local scriptCoroutine = nil
+local positionConnection = nil
 
 -- GUI 主體
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
@@ -38,7 +45,7 @@ Instance.new("UICorner", Frame).CornerRadius = UDim.new(0, 15)
 -- 修正：標題樣式
 local Title = Instance.new("TextLabel", Frame)
 Title.Size = UDim2.new(1, -80, 0, 50)
-Title.Position = UDim2.new(0, 15, 0, 0)  -- 往上移動5像素原為5
+Title.Position = UDim2.new(0, 15, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "✨ 貓玲的腳本區 ✨"
 Title.Font = Enum.Font.GothamBold
@@ -74,8 +81,19 @@ Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 8)
 
 -- 修正：關閉按鈕功能
 Close.MouseButton1Click:Connect(function()
+    -- 停止腳本運行和位置鎖定
+    isScriptRunning = false
+    isPositionLocked = false
+    if scriptCoroutine then
+        coroutine.close(scriptCoroutine)
+        scriptCoroutine = nil
+    end
+    if positionConnection then
+        positionConnection:Disconnect()
+        positionConnection = nil
+    end
     ScreenGui:Destroy()
-    _G.maolingHubLoaded = false -- 重置載入狀態
+    _G.maolingHubLoaded = false
 end)
 
 -- 修正：最小化按鈕樣式
@@ -154,27 +172,23 @@ local function createSectionButton(text, order, parent)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0, 120, 0, 45)
     btn.Text = text
-    btn.BackgroundColor3 = Color3.fromRGB(85, 85, 105)  -- 比原本更亮的背景
+    btn.BackgroundColor3 = Color3.fromRGB(85, 85, 105)
     
-    -- 最亮的文字設定
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)  -- 純白色
-    btn.TextTransparency = 0  -- 完全不透明
-    btn.Font = Enum.Font.GothamBold  -- 粗體字
-    btn.TextSize = 16  -- 適中大小
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextTransparency = 0
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 16
     btn.BorderSizePixel = 0
     
-    -- 添加圓角
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
     
-    -- 簡化描邊
     local btnStroke = Instance.new("UIStroke", btn)
     btnStroke.Color = Color3.fromRGB(150, 180, 255)
     btnStroke.Thickness = 1
     btnStroke.Transparency = 0.6
     
-    -- 簡單hover效果
     btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(105, 105, 125)  -- hover時更亮
+        btn.BackgroundColor3 = Color3.fromRGB(105, 105, 125)
         btnStroke.Transparency = 0.3
     end)
     
@@ -187,79 +201,129 @@ local function createSectionButton(text, order, parent)
 end
 
 -- 修正：簡單高亮文字的一般按鈕樣式
-local function createButton(text, order, parent, spacing)
+local function createButton(text, order, parent, spacing, customColor)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0, 180, 0, 35)
     btn.Position = UDim2.new(0.5, -90, 0, 10 + (order - 1) * spacing)
     btn.Text = text
-    btn.BackgroundColor3 = Color3.fromRGB(80, 140, 220)  -- 比原本更亮的背景
+    btn.BackgroundColor3 = customColor or Color3.fromRGB(80, 140, 220)
     
-    -- 最亮的文字設定
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)  -- 純白色
-    btn.TextSize = 16  -- 適中大小
-    btn.Font = Enum.Font.GothamBold  -- 粗體字
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 16
+    btn.Font = Enum.Font.GothamBold
     btn.BorderSizePixel = 0
     
-    -- 添加圓角
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     
-    -- 簡化描邊
     local btnStroke = Instance.new("UIStroke", btn)
     btnStroke.Color = Color3.fromRGB(120, 170, 255)
     btnStroke.Thickness = 1
     btnStroke.Transparency = 0.6
     
-    -- 簡單hover效果
     btn.MouseEnter:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(100, 160, 240)  -- hover時更亮
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)  -- 保持純白
+        if customColor then
+            btn.BackgroundColor3 = Color3.fromRGB(
+                math.min(255, customColor.R * 255 + 20),
+                math.min(255, customColor.G * 255 + 20),
+                math.min(255, customColor.B * 255 + 20)
+            )
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(100, 160, 240)
+        end
         btnStroke.Transparency = 0.3
     end)
     
     btn.MouseLeave:Connect(function()
-        btn.BackgroundColor3 = Color3.fromRGB(80, 140, 220)
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)  -- 保持純白
+        btn.BackgroundColor3 = customColor or Color3.fromRGB(80, 140, 220)
         btnStroke.Transparency = 0.6
     end)
     
     return btn
 end
 
--- 添加滾動框樣式改善
-local function styleScrollFrame(scrollFrame)
-    scrollFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
-    scrollFrame.BorderSizePixel = 0
-    scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 150, 255)
-    
-    local scrollGradient = Instance.new("UIGradient", scrollFrame)
-    scrollGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 65)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(55, 55, 80))
-    }
-    
-    Instance.new("UICorner", scrollFrame).CornerRadius = UDim.new(0, 8)
-end
-
 -- 創建主頁面分區按鈕
 local homeButton = createSectionButton("主頁面", 1, SideBar)
 
--- 創建腳本啟動按鈕並添加到主頁面內容區域
-local startScriptButton = createButton("啟動腳本", 1, Content, 45)
+-- 創建狀態顯示標籤
+local statusLabel = Instance.new("TextLabel", Content)
+statusLabel.Size = UDim2.new(1, -20, 0, 25)
+statusLabel.Position = UDim2.new(0, 10, 0, 10)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "腳本狀態：待機中"
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 14
+statusLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
--- 腳本主要功能
-local function runScript()
-    -- 記錄啟動前的位置
-    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local hrp = character:WaitForChild("HumanoidRootPart")
-    originalPosition = hrp.CFrame
+-- 創建位置狀態標籤
+local positionLabel = Instance.new("TextLabel", Content)
+positionLabel.Size = UDim2.new(1, -20, 0, 25)
+positionLabel.Position = UDim2.new(0, 10, 0, 35)
+positionLabel.BackgroundTransparency = 1
+positionLabel.Text = "位置鎖定：關閉"
+positionLabel.Font = Enum.Font.Gotham
+positionLabel.TextSize = 14
+positionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+positionLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+-- 創建腳本控制按鈕
+local startScriptButton = createButton("開始腳本", 1, Content, 45, Color3.fromRGB(60, 180, 75))
+startScriptButton.Position = UDim2.new(0.5, -90, 0, 70)
+
+local stopScriptButton = createButton("停止腳本", 2, Content, 45, Color3.fromRGB(220, 60, 60))
+stopScriptButton.Position = UDim2.new(0.5, -90, 0, 115)
+
+-- 初始狀態：停止按鈕不可見
+stopScriptButton.Visible = false
+
+-- 位置鎖定功能
+local function startPositionLock()
+    if positionConnection then
+        positionConnection:Disconnect()
+    end
     
+    positionConnection = RunService.Heartbeat:Connect(function()
+        if isPositionLocked and originalPosition then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local hrp = character.HumanoidRootPart
+                -- 只有當位置偏差超過一定範圍時才進行修正，避免過度頻繁的位置調整
+                local currentPos = hrp.Position
+                local targetPos = originalPosition.Position
+                local distance = (currentPos - targetPos).Magnitude
+                
+                if distance > 0.5 then -- 如果偏差超過0.5個單位就修正
+                    hrp.CFrame = originalPosition
+                end
+            end
+        end
+    end)
+end
+
+-- 停止位置鎖定功能
+local function stopPositionLock()
+    if positionConnection then
+        positionConnection:Disconnect()
+        positionConnection = nil
+    end
+end
+
+-- 腳本主要功能（原循環邏輯）
+local function runScript()
     -- 使用用戶名作為輸入
     local inputText = LocalPlayer.Name
-    local combinedText = "\195\133Baller" .. inputText  -- 合併字符串
+    local combinedText = "\195\133Baller" .. inputText
 
-    for i = 1,750 do
-        -- 觸發 ClickDetector 事件，將玩家傳送到指定位置
-        fireclickdetector(workspace.Lobby["Baller"].ClickDetector)
+    local counter = 0
+    
+    while isScriptRunning do
+        counter = counter + 1
+        statusLabel.Text = "腳本狀態：運行中 (第 " .. counter .. " 次)"
+        
+        -- 觸發 ClickDetector 事件
+        if workspace.Lobby:FindFirstChild("Baller") and workspace.Lobby.Baller:FindFirstChild("ClickDetector") then
+            fireclickdetector(workspace.Lobby["Baller"].ClickDetector)
+        end
 
         -- 傳送玩家到 Workspace.Lobby.Teleport1
         local teleportPart = game:GetService("Workspace"):WaitForChild("Lobby"):FindFirstChild("Teleport1")
@@ -272,41 +336,121 @@ local function runScript()
             -- 設定傳送位置，避免卡住
             hrp.CFrame = teleportPart.CFrame + Vector3.new(0, 5, 0)
             
-            -- 等待一小段時間，然後傳送回原始位置
+            -- 等待一小段時間
             wait(0.1)
-            if originalPosition then
-                hrp.CFrame = originalPosition
-            end
         else
             warn("找不到指定部件：Lobby.Teleport1")
         end
 
+        if not isScriptRunning then break end
+
         -- 等待 1 秒後觸發 GeneralAbility 事件
         wait(1)
-        game:GetService("ReplicatedStorage"):WaitForChild("GeneralAbility"):FireServer()
+        if not isScriptRunning then break end
+        
+        local generalAbility = game:GetService("ReplicatedStorage"):FindFirstChild("GeneralAbility")
+        if generalAbility then
+            generalAbility:FireServer()
+        end
 
         -- 發送 Reset 事件
-        game:GetService("Players").LocalPlayer:WaitForChild("Reset"):FireServer()
+        local resetRemote = game:GetService("Players").LocalPlayer:FindFirstChild("Reset")
+        if resetRemote then
+            resetRemote:FireServer()
+        end
+
+        if not isScriptRunning then break end
 
         -- 等待 4 秒後觸發 Booster 的 ClickDetector
         wait(4)
-        fireclickdetector(workspace.Lobby["Booster"].ClickDetector)
+        if not isScriptRunning then break end
+        
+        if workspace.Lobby:FindFirstChild("Booster") and workspace.Lobby.Booster:FindFirstChild("ClickDetector") then
+            fireclickdetector(workspace.Lobby["Booster"].ClickDetector)
+        end
 
-        -- 重複 2 次，間隔 1 秒
+        -- 確保只攻擊 2 次，攻擊完成後立即進入下一循環
+        local attackCount = 0
         for j = 1, 2 do
+            if not isScriptRunning then break end
             wait(1)
-            local args = {
-                [1] = workspace:WaitForChild(combinedText):WaitForChild("Torso")
-            }
-            -- 觸發攻擊
-            game:GetService("ReplicatedStorage"):WaitForChild("GeneralHit"):FireServer(unpack(args))
+            
+            local targetObject = workspace:FindFirstChild(combinedText)
+            if targetObject and targetObject:FindFirstChild("Torso") then
+                local args = {
+                    [1] = targetObject.Torso
+                }
+                local generalHit = game:GetService("ReplicatedStorage"):FindFirstChild("GeneralHit")
+                if generalHit then
+                    generalHit:FireServer(unpack(args))
+                    attackCount = attackCount + 1
+                    -- 攻擊成功後立即檢查是否已達到2次
+                    if attackCount >= 2 then
+                        break -- 攻擊2次後立即跳出循環
+                    end
+                end
+            else
+                -- 如果找不到目標，仍然計入攻擊次數以防止無限等待
+                attackCount = attackCount + 1
+                if attackCount >= 2 then
+                    break
+                end
+            end
         end
     end
+    
+    -- 腳本停止後的清理
+    statusLabel.Text = "腳本狀態：已停止"
+    startScriptButton.Visible = true
+    stopScriptButton.Visible = false
+    isScriptRunning = false
+    scriptCoroutine = nil
 end
 
--- 按鈕點擊事件
+-- 開始按鈕點擊事件
 startScriptButton.MouseButton1Click:Connect(function()
-    runScript()
+    if not isScriptRunning then
+        -- 記錄當前位置（按鈕按下前的位置）
+        local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        originalPosition = hrp.CFrame
+        
+        -- 啟動位置鎖定
+        isPositionLocked = true
+        startPositionLock()
+        positionLabel.Text = "位置鎖定：開啟 (已鎖定當前位置)"
+        positionLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        
+        -- 啟動腳本
+        isScriptRunning = true
+        startScriptButton.Visible = false
+        stopScriptButton.Visible = true
+        statusLabel.Text = "腳本狀態：準備中..."
+        
+        -- 在協程中運行腳本
+        scriptCoroutine = coroutine.create(runScript)
+        coroutine.resume(scriptCoroutine)
+    end
+end)
+
+-- 停止按鈕點擊事件
+stopScriptButton.MouseButton1Click:Connect(function()
+    -- 停止腳本
+    isScriptRunning = false
+    if scriptCoroutine then
+        coroutine.close(scriptCoroutine)
+        scriptCoroutine = nil
+    end
+    
+    -- 停止位置鎖定
+    isPositionLocked = false
+    stopPositionLock()
+    positionLabel.Text = "位置鎖定：關閉"
+    positionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    
+    statusLabel.Text = "腳本狀態：停止中..."
+    startScriptButton.Visible = true
+    stopScriptButton.Visible = false
 end)
 
 -- 默認顯示主頁面內容
