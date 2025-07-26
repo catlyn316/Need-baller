@@ -57,30 +57,13 @@ startButton.MouseButton1Click:Connect(function()
     local inputText = textBox.Text
     local combinedText = "\195\133Baller" .. inputText  -- 合併字符串
 
-    for i = 1, 300 do
+    for i = 1, 750 do
         -- 觸發 ClickDetector 事件，將玩家傳送到指定位置
         fireclickdetector(workspace.Lobby["Baller"].ClickDetector)
-
-        -- 傳送玩家到 Workspace.Lobby.Teleport1
-        local teleportPart = game:GetService("Workspace"):WaitForChild("Lobby"):FindFirstChild("Teleport1")
-
-        if teleportPart and teleportPart:IsA("BasePart") then
-            local player = game.Players.LocalPlayer
-            local character = player.Character or player.CharacterAdded:Wait()
-            local hrp = character:WaitForChild("HumanoidRootPart")
-
-            -- 設定傳送位置，避免卡住
-            hrp.CFrame = teleportPart.CFrame + Vector3.new(0, 5, 0)
-        else
-            warn("找不到指定部件：Lobby.Teleport1")
-        end
 
         -- 等待 1 秒後觸發 GeneralAbility 事件
         wait(1)
         game:GetService("ReplicatedStorage"):WaitForChild("GeneralAbility"):FireServer()
-
-        -- 發送 Reset 事件
-        game:GetService("Players").LocalPlayer:WaitForChild("Reset"):FireServer()
 
         -- 等待 4 秒後觸發 Booster 的 ClickDetector
         wait(4)
