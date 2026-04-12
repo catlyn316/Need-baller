@@ -243,7 +243,7 @@ stopScriptButton.Position = UDim2.new(0.5, -90, 0, 115)
 stopScriptButton.Visible = false
 
 -- 新增：移動到大炮島底下按鈕
-local cannonButton = createButton("移動到大炮島底下", 3, Content, 45, Color3.fromRGB(180, 120, 40))
+local cannonButton = createButton("移動到樹中(別進紅門)", 3, Content, 45, Color3.fromRGB(180, 120, 40))
 cannonButton.Position = UDim2.new(0.5, -90, 0, 170)
 
 local function startPositionLock()
@@ -400,8 +400,8 @@ end)
 cannonButton.MouseButton1Click:Connect(function()
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local hrp = character:WaitForChild("HumanoidRootPart")
-    hrp.CFrame = CFrame.new(269, 16, 199)
-    statusLabel.Text = "已移動到大炮島底下"
+    hrp.CFrame = CFrame.new(-368, 77, -39)
+    statusLabel.Text = "已移動到樹中，有bug跟貓玲說"
 end)
 
 homeButton.MouseButton1Click:Connect(function()
